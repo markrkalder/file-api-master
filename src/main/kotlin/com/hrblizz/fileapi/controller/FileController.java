@@ -3,14 +3,17 @@ package com.hrblizz.fileapi.controller;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hrblizz.fileapi.controller.exception.BadRequestException;
+import com.hrblizz.fileapi.controller.exception.NotFoundException;
 import com.hrblizz.fileapi.data.entities.Entity;
+import com.hrblizz.fileapi.library.log.LogItem;
+import com.hrblizz.fileapi.library.log.Logger;
 import com.hrblizz.fileapi.rest.ErrorMessage;
 import com.hrblizz.fileapi.rest.ResponseEntity;
 import com.hrblizz.fileapi.service.FileStorageService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -26,6 +29,7 @@ public class FileController {
 
     @Autowired
     FileStorageService storageService;
+    Logger logger;
 
     @PostMapping("/files")
     public ResponseEntity<String> uploadFile(
@@ -43,10 +47,16 @@ public class FileController {
             String token = storageService.save(name, contentType, metaMap, source, expireTime, file);
             return new ResponseEntity<>(token, 201);
         }
-        catch (Exception e) {
+        catch (BadRequestException e) {
             return new ResponseEntity<>(null,
                     Collections.singletonList(new ErrorMessage(e.getMessage(),
                     Integer.toString(e.hashCode()))), 400);
+        }
+        catch (Exception e) {
+            logger.crit(new LogItem(e.getMessage()));
+            return new ResponseEntity<>(null,
+                    Collections.singletonList(new ErrorMessage(e.getMessage(),
+                            Integer.toString(e.hashCode()))), 503);
         }
     }
 
@@ -56,9 +66,13 @@ public class FileController {
             List<Map<String, Map<String, Object>>> metadata = storageService.loadMetadata(tokens);
             return new ResponseEntity<>(metadata, 200);
         }
+        catch (BadRequestException e){
+            return new ResponseEntity<>(null, Collections.singletonList(new ErrorMessage(e.getMessage(), Integer.toString(e.hashCode()))), 400);
+        }
         catch (Exception e){
+            logger.crit(new LogItem(e.getMessage()));
             return new ResponseEntity<>(null, Collections.singletonList(new ErrorMessage(e.getMessage(),
-                    Integer.toString(e.hashCode()))), 400);
+                    Integer.toString(e.hashCode()))), 503);
         }
     }
 
@@ -77,8 +91,12 @@ public class FileController {
             response.addHeader("X-CreateTime:", metaData.createTime);
             return org.springframework.http.ResponseEntity.ok().contentType(MediaType.parseMediaType(metaData.contentType)).body(file);
         }
+        catch (BadRequestException e) {
+            return org.springframework.http.ResponseEntity.badRequest().body(null);
+        }
         catch (Exception e){
-            return org.springframework.http.ResponseEntity.status(HttpStatus.EXPECTATION_FAILED).body(null);
+            logger.crit(new LogItem(e.getMessage()));
+            return org.springframework.http.ResponseEntity.internalServerError().body(null);
         }
     }
 
@@ -88,9 +106,14 @@ public class FileController {
             storageService.delete(token);
             return new ResponseEntity<>(null, 200);
         }
-        catch (Exception e){
+        catch (NotFoundException e) {
             return new ResponseEntity<>(null, Collections.singletonList(new ErrorMessage(e.getMessage(),
                     Integer.toString(e.hashCode()))), 400);
+        }
+        catch (Exception e) {
+            logger.crit(new LogItem(e.getMessage()));
+            return new ResponseEntity<>(null, Collections.singletonList(new ErrorMessage(e.getMessage(),
+                    Integer.toString(e.hashCode()))), 503);
         }
     }
 }

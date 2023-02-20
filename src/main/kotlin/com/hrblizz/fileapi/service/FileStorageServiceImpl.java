@@ -2,9 +2,12 @@ package com.hrblizz.fileapi.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hrblizz.fileapi.controller.exception.BadRequestException;
 import com.hrblizz.fileapi.controller.exception.NotFoundException;
 import com.hrblizz.fileapi.data.entities.Entity;
 import com.hrblizz.fileapi.data.repository.EntityRepository;
+import com.hrblizz.fileapi.library.log.LogItem;
+import com.hrblizz.fileapi.library.log.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
@@ -26,7 +29,7 @@ public class FileStorageServiceImpl implements FileStorageService{
 
     @Autowired
     private EntityRepository entityRepository;
-
+    private Logger logger;
     private final Path root = Paths.get("uploads");
 
     @Override
@@ -34,6 +37,7 @@ public class FileStorageServiceImpl implements FileStorageService{
         try {
             Files.createDirectories(root);
         } catch (IOException e) {
+            logger.crit(new LogItem("Could not initialize a folder for upload " + e.getMessage()));
             throw new RuntimeException("Could not initialize folder for upload!");
         }
     }
@@ -50,8 +54,9 @@ public class FileStorageServiceImpl implements FileStorageService{
         }
         catch (Exception e) {
             if (e instanceof FileAlreadyExistsException) {
-                throw new RuntimeException("A file of that name already exists.");
+                throw new BadRequestException("A file of that name already exists.");
             }
+            logger.crit(new LogItem(e.getMessage()));
             throw new RuntimeException(e.getMessage());
         }
 
@@ -89,9 +94,12 @@ public class FileStorageServiceImpl implements FileStorageService{
                     return Arrays.asList(resource, entity.get());
                 }
                 else {
+                    logger.crit(new LogItem("File with the token of " + token + " could not be read."));
                     throw new RuntimeException("Could not read the file!");
                 }
-            } catch (MalformedURLException e) {
+            }
+            catch (MalformedURLException e) {
+                logger.crit(new LogItem("Error: " + e.getMessage()));
                 throw new RuntimeException("Error: " + e.getMessage());
             }
         }
@@ -114,7 +122,6 @@ public class FileStorageServiceImpl implements FileStorageService{
             }
             else throw new NotFoundException("Could not find the file!");
         }
-
         return metaDataList;
     }
 
@@ -131,7 +138,8 @@ public class FileStorageServiceImpl implements FileStorageService{
                     FileSystemUtils.deleteRecursively(file.toFile());
                 }
                 else {
-                    throw new RuntimeException("Could not find the file!");
+                    logger.crit(new LogItem("File couldn't be deleted, token: " + token));
+                    throw new RuntimeException("Could not delete the file!");
                 }
                 entityRepository.delete(entity.get());
             }
